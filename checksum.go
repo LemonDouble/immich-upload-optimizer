@@ -264,7 +264,10 @@ func (replacer Replacer) Replace() (err error) {
 			}
 			for _, value := range streams {
 				if v, ok := value.(map[string]any); ok {
-					if t, ok := v["type"].(string); ok && !slices.Contains([]string{"AssetV1", "AlbumAssetCreateV1", "AlbumAssetUpdateV1", "AlbumAssetBackfillV1", "PartnerAssetV1", "PartnerAssetBackfillV1"}, t) {
+					// Immich v3 deprecated AssetV1-style sync entities in favor of V2 variants (same payload shape,
+					// checksum field included). Without translating V2 entries the mobile app sees optimized
+					// checksums, matches nothing locally and re-uploads the whole library forever.
+					if t, ok := v["type"].(string); ok && !slices.Contains([]string{"AssetV1", "AlbumAssetCreateV1", "AlbumAssetUpdateV1", "AlbumAssetBackfillV1", "PartnerAssetV1", "PartnerAssetBackfillV1", "AssetV2", "AlbumAssetCreateV2", "AlbumAssetUpdateV2", "AlbumAssetBackfillV2", "PartnerAssetV2", "PartnerAssetBackfillV2"}, t) {
 						continue
 					}
 					if asset, ok := v["data"].(map[string]any); ok {
