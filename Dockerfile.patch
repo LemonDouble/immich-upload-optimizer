@@ -2,7 +2,7 @@
 FROM golang:1.26 AS build
 WORKDIR /src
 COPY . .
-RUN go mod tidy && CGO_ENABLED=0 go build -o /iuo .
+RUN go mod tidy && CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=v1.0.1-assetv2" -o /iuo .
 
 FROM ghcr.io/joojoooo/immich-upload-optimizer:v1.0.1
 COPY --from=build /iuo /usr/local/bin/immich-upload-optimizer
