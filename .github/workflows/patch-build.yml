@@ -25,5 +25,5 @@ jobs:
           file: Dockerfile.patch
           push: true
           tags: |
-            ghcr.io/lemondouble/immich-upload-optimizer:v1.0.1-assetv2
-            ghcr.io/lemondouble/immich-upload-optimizer:sha-${{ github.sha }}
+            ghcr.io/lemondoublehq/immich-upload-optimizer:v1.0.1-assetv2
+            ghcr.io/lemondoublehq/immich-upload-optimizer:sha-${{ github.sha }}
