@@ -206,9 +206,16 @@ func newJob(r *http.Request, w http.ResponseWriter, logger *customLogger) error 
 	if err == nil && taskProcessor != nil {
 		defer taskProcessor.Close()
 		if err = taskProcessor.Run(); err != nil {
-			return fmt.Errorf("job %d: failed to process file: %v", jobID, err.Error())
-		}
-		if taskProcessor.OriginalSize <= taskProcessor.ProcessedSize {
+			if !passthroughOnError {
+				return fmt.Errorf("job %d: failed to process file: %v", jobID, err.Error())
+			}
+			// A task that chokes on one file must not block its upload. Returning here writes no
+			// response at all, so the app reports "Failed to parse server response" and retries the
+			// same asset forever, stalling the whole backup queue behind it. Fall through with the
+			// original instead, which is what already happens when no task matches the extension.
+			jobLogger.Print(magenta("task failed, uploading original:") + " \"" + white(fileName) + "\" " + magenta("(%v)", err))
+			_ = taskProcessor.CleanWorkDir()
+		} else if taskProcessor.OriginalSize <= taskProcessor.ProcessedSize {
 			uploadFile = taskProcessor.OriginalFile
 			_ = taskProcessor.CleanWorkDir() // Save RAM before upload (tmpfs)
 		} else {

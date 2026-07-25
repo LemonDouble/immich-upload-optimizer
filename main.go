@@ -41,6 +41,7 @@ var checksumsFile string
 var downloadJpgFromJxl bool
 var downloadJpgFromAvif bool
 var forceColors bool
+var passthroughOnError bool
 
 var config *Config
 
@@ -55,6 +56,7 @@ func init() {
 	viper.BindEnv("max_image_jobs")
 	viper.BindEnv("max_video_jobs")
 	viper.BindEnv("force_colors")
+	viper.BindEnv("passthrough_on_error")
 
 	viper.SetDefault("upstream", "")
 	viper.SetDefault("listen", ":2284")
@@ -65,6 +67,7 @@ func init() {
 	viper.SetDefault("max_image_jobs", 5)
 	viper.SetDefault("max_video_jobs", 1)
 	viper.SetDefault("force_colors", true)
+	viper.SetDefault("passthrough_on_error", true)
 
 	flag.BoolVar(&showVersion, "version", false, "Show the current version")
 	flag.StringVar(&upstreamURL, "upstream", viper.GetString("upstream"), "Upstream URL. Example: http://immich-server:2283")
@@ -76,6 +79,7 @@ func init() {
 	flag.UintVar(&maxImageJobs, "max_image_jobs", viper.GetUint("max_image_jobs"), "Max number of image jobs running concurrently")
 	flag.UintVar(&maxVideoJobs, "max_video_jobs", viper.GetUint("max_video_jobs"), "Max number of video jobs running concurrently")
 	flag.BoolVar(&forceColors, "force_colors", viper.GetBool("force_colors"), "Force colored output even in non-TTY environments like Docker")
+	flag.BoolVar(&passthroughOnError, "passthrough_on_error", viper.GetBool("passthrough_on_error"), "Upload the original file when a task fails instead of failing the upload")
 	flag.Parse()
 
 	if forceColors {
