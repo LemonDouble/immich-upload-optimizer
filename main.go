@@ -80,7 +80,12 @@ func init() {
 	flag.UintVar(&maxVideoJobs, "max_video_jobs", viper.GetUint("max_video_jobs"), "Max number of video jobs running concurrently")
 	flag.BoolVar(&forceColors, "force_colors", viper.GetBool("force_colors"), "Force colored output even in non-TTY environments like Docker")
 	flag.BoolVar(&passthroughOnError, "passthrough_on_error", viper.GetBool("passthrough_on_error"), "Upload the original file when a task fails instead of failing the upload")
-	flag.Parse()
+	// The test binary carries -test.* flags this flag set does not declare, and ExitOnError
+	// would kill the process before any test runs. Skipping the parse there keeps the
+	// package testable without moving startup out of init().
+	if !strings.HasSuffix(os.Args[0], ".test") {
+		flag.Parse()
+	}
 
 	if forceColors {
 		color.NoColor = false

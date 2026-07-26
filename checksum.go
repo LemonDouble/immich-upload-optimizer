@@ -52,22 +52,32 @@ func initChecksums() {
 	}
 }
 
-// setChecksumPair ensures a fake<->original 1:1 relationship. Caller must hold mapLock.
+// setChecksumPair records original -> fake, which is many-to-one: distinct originals
+// that hold the same pixels (a copy saved in another format, a re-download) convert to
+// a byte-identical file, and immich dedupes those into a single asset.
+//
+// Evicting the older original here made the app re-upload it forever. The eviction
+// removed its originalToFakeChecksum entry, so replaceBulkUploadCheck no longer found
+// a fake for it and the server answered "not present"; the resulting upload then evicted
+// the other original right back. Both sides ping-ponged and never left the backup queue.
+//
+// The reverse direction stays 1:1 — one server asset can only report one checksum — and
+// keeps the first original it learned, so the timeline link does not flip between copies.
+// Caller must hold mapLock.
 func setChecksumPair(fake, original string) bool {
-	if existingOriginal, ok := fakeToOriginalChecksum[fake]; ok && existingOriginal == original {
-		fmt.Println(magenta("Duplicate checksum pair: %s <-> %s", fake, original))
-		return false
-	}
-	if oldOriginal, ok := fakeToOriginalChecksum[fake]; ok && oldOriginal != original {
-		fmt.Println(red("Duplicate fake checksum: %s -> %s , %s", fake, oldOriginal, original))
-		delete(originalToFakeChecksum, oldOriginal)
-	}
-	if oldFake, ok := originalToFakeChecksum[original]; ok && oldFake != fake {
+	if oldFake, ok := originalToFakeChecksum[original]; ok {
+		if oldFake == fake {
+			return false
+		}
+		// One original now converts to something else (task settings changed, encoder
+		// upgrade). This direction is genuinely 1:1, so drop the stale reverse entry.
 		fmt.Println(red("Duplicate orig checksum: %s -> %s , %s", original, oldFake, fake))
 		delete(fakeToOriginalChecksum, oldFake)
 	}
-	fakeToOriginalChecksum[fake] = original
 	originalToFakeChecksum[original] = fake
+	if _, ok := fakeToOriginalChecksum[fake]; !ok {
+		fakeToOriginalChecksum[fake] = original
+	}
 	return true
 }
 
