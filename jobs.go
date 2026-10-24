@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -28,6 +29,11 @@ type jobEntry struct {
 func newJob(r *http.Request, w http.ResponseWriter, logger *customLogger) error {
 	jobID := jobIdCounter.Add(1)
 	jobLogger := newCustomLogger(logger, fmt.Sprintf("job %d: ", jobID))
+
+	// Conversion tools parse the file before immich sees the request, so unauthenticated uploads must stop here.
+	if err := requireUploadPermission(w, r); err != nil {
+		return fmt.Errorf("job %d: %w", jobID, err)
+	}
 
 	// Use streaming multipart reader to read form fields before the file. This allows checking for duplicate jobs before downloading the full asset data.
 	mr, err := r.MultipartReader()
@@ -243,6 +249,31 @@ func newJob(r *http.Request, w http.ResponseWriter, logger *customLogger) error 
 	}
 
 	return nil
+}
+
+// bulk-upload-check requires the same AssetUpload permission as the upload itself, without the side effects.
+// Shared link uploads are rejected because that endpoint doesn't accept shared link auth.
+func requireUploadPermission(w http.ResponseWriter, r *http.Request) error {
+	checkReq, err := http.NewRequestWithContext(r.Context(), "POST", upstreamURL+"/api/assets/bulk-upload-check", strings.NewReader(`{"assets":[]}`))
+	if err != nil {
+		return fmt.Errorf("auth check: %w", err)
+	}
+	checkReq.Header = r.Header.Clone()
+	checkReq.Header.Set("Content-Type", "application/json")
+	resp, err := getHTTPclient().Do(checkReq)
+	if err != nil {
+		http.Error(w, "unable to verify credentials with immich", http.StatusBadGateway)
+		return fmt.Errorf("auth check: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusOK {
+		return nil
+	}
+	// Forward immich's rejection so clients react as usual (e.g. the app asks to log in again)
+	setHeaders(w.Header(), resp.Header)
+	w.WriteHeader(resp.StatusCode)
+	_, _ = io.Copy(w, resp.Body)
+	return fmt.Errorf("auth check: immich rejected the upload with status %d", resp.StatusCode)
 }
 
 func uploadUpstream(w http.ResponseWriter, r *http.Request, file io.ReadSeeker, name string, formValues map[string][]string) (err error) {
