@@ -4,5 +4,24 @@ WORKDIR /src
 COPY . .
 RUN go mod tidy && CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=v1.0.1-assetv2" -o /iuo .
 
+# 베이스 이미지(Debian sid)의 libbrotli 1.2.0은 CVE-2026-111497에 취약하고 sid에는 아직 수정본이 없다.
+# 베이스의 glibc(2.42)보다 오래된 trixie에서 빌드해야 교체한 라이브러리가 로드된다.
+FROM debian:trixie-slim AS brotli
+ARG BROTLI_VERSION=1.2.1
+ARG BROTLI_SHA256=98d35d11a78dc453aebb7d10c3748f3f73ff78c8267c0dc697b8631f67bf7e8f
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl cmake make gcc libc6-dev
+RUN curl -fsSL -o /brotli.tar.gz https://github.com/google/brotli/archive/refs/tags/v${BROTLI_VERSION}.tar.gz && \
+    echo "${BROTLI_SHA256}  /brotli.tar.gz" | sha256sum -c - && \
+    tar xzf /brotli.tar.gz -C / && \
+    cmake -S /brotli-${BROTLI_VERSION} -B /build -DCMAKE_BUILD_TYPE=Release -DBROTLI_BUILD_TOOLS=OFF -DBUILD_TESTING=OFF && \
+    cmake --build /build --parallel && \
+    mkdir /out && cp /build/libbrotli*.so.${BROTLI_VERSION} /out/
+
 FROM ghcr.io/joojoooo/immich-upload-optimizer:v1.0.1
+ARG BROTLI_VERSION=1.2.1
+COPY --from=brotli /out/ /usr/lib/x86_64-linux-gnu/
+RUN cd /usr/lib/x86_64-linux-gnu && \
+    for lib in libbrotlicommon libbrotlidec libbrotlienc; do \
+      rm -f "$lib.so.1.2.0" && ln -sf "$lib.so.${BROTLI_VERSION}" "$lib.so.1"; \
+    done
 COPY --from=build /iuo /usr/local/bin/immich-upload-optimizer
