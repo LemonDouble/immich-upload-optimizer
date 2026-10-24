@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"log"
 	"mime/multipart"
@@ -11,12 +12,18 @@ import (
 )
 
 // Fake immich that only accepts the "valid" API key and records which paths were called.
+// Like the real one, it fails with 500 on an empty asset list.
 func newFakeImmich(t *testing.T, calledPaths *[]string) {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		*calledPaths = append(*calledPaths, r.Method+" "+r.URL.Path)
 		if r.Header.Get("x-api-key") != "valid" {
 			http.Error(w, `{"message":"Invalid API key"}`, http.StatusUnauthorized)
+			return
+		}
+		var checkRequest bulkUploadCheckRequest
+		if err := json.NewDecoder(r.Body).Decode(&checkRequest); err != nil || len(checkRequest.Assets) == 0 {
+			http.Error(w, `{"message":"Internal server error"}`, http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")

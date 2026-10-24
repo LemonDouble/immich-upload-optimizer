@@ -253,8 +253,10 @@ func newJob(r *http.Request, w http.ResponseWriter, logger *customLogger) error 
 
 // bulk-upload-check requires the same AssetUpload permission as the upload itself, without the side effects.
 // Shared link uploads are rejected because that endpoint doesn't accept shared link auth.
+// immich answers an empty asset list with a SQL error (500), so a checksum that never matches is sent instead.
 func requireUploadPermission(w http.ResponseWriter, r *http.Request) error {
-	checkReq, err := http.NewRequestWithContext(r.Context(), "POST", upstreamURL+"/api/assets/bulk-upload-check", strings.NewReader(`{"assets":[]}`))
+	checkBody, _ := json.Marshal(bulkUploadCheckRequest{Assets: []bulkUploadCheckItem{{ID: "iuo-auth-check", Checksum: strings.Repeat("0", 40)}}})
+	checkReq, err := http.NewRequestWithContext(r.Context(), "POST", upstreamURL+"/api/assets/bulk-upload-check", bytes.NewReader(checkBody))
 	if err != nil {
 		return fmt.Errorf("auth check: %w", err)
 	}
